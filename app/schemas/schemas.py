@@ -63,6 +63,29 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class AdminGoogleLoginRequest(BaseModel):
+    id_token: str
+
+
+class AdminAccountResponse(BaseModel):
+    id: uuid.UUID
+    email: str
+    name: str
+    avatar_url: Optional[str] = None
+    is_active: bool = True
+    last_login_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AdminTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    admin: AdminAccountResponse
+
+
 # ============= Task Category Schemas =============
 class TaskCategoryBase(BaseModel):
     name: str = Field(..., max_length=50)

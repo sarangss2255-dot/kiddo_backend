@@ -4,9 +4,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.models import User, RefreshToken
+from app.models.models import AdminAccount, RefreshToken, User
 from app.core.security import verify_token
-from app.config import settings
 
 security = HTTPBearer()
 
@@ -62,14 +61,44 @@ async def get_current_parent(current_user: User = Depends(get_current_user)) -> 
     return current_user
 
 
-async def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Ensure the current user is an admin."""
-    if current_user.role != "admin":
+async def get_current_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> AdminAccount:
+    """Get the current authenticated admin from the admin JWT token."""
+    token = credentials.credentials
+    payload = verify_token(token)
+
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid admin token"
+        )
+
+    if payload.get("type") != "access" or payload.get("scope") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This action requires admin privileges"
         )
-    return current_user
+
+    email = payload.get("sub")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid admin token payload"
+        )
+
+    admin = db.query(AdminAccount).filter(
+        AdminAccount.email == email.lower(),
+        AdminAccount.is_active == True
+    ).first()
+    if not admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin account not found or inactive"
+        )
+
+    return admin
 
 
 async def get_current_kid_or_parent(current_user: User = Depends(get_current_user)) -> User:

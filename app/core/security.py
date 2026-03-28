@@ -22,6 +22,16 @@ def create_refresh_token(data: dict) -> str:
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
+def create_admin_access_token(data: dict, expires_delta: timedelta = None) -> str:
+    """Create a JWT access token for admin web sessions."""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (
+        expires_delta or timedelta(minutes=settings.access_token_expire_minutes)
+    )
+    to_encode.update({"exp": expire, "type": "access", "scope": "admin"})
+    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+
+
 def verify_token(token: str) -> dict:
     """Verify and decode a JWT token."""
     try:

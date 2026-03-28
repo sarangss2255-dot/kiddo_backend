@@ -1,9 +1,10 @@
 """Main FastAPI application."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.v1 import admin, admin_auth, auth, games, leaderboard, rewards, tasks, users
 from app.config import settings
+from app.core.firebase_auth import initialize_firebase_admin, is_firebase_admin_initialized
 from app.database import engine, Base
-from app.api.v1 import auth, users, tasks, rewards, games, leaderboard, admin
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -33,6 +34,7 @@ app.include_router(tasks.router, prefix="/api/v1")
 app.include_router(rewards.router, prefix="/api/v1")
 app.include_router(games.router, prefix="/api/v1")
 app.include_router(leaderboard.router, prefix="/api/v1")
+app.include_router(admin_auth.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 
 
@@ -49,13 +51,16 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "firebase_admin_initialized": is_firebase_admin_initialized(),
+    }
 
 
 def create_default_data():
     """Create default data for the application."""
     from app.database import SessionLocal
-    from app.models.models import TaskCategory, GameType, User, UserRole, TaskTemplate, Task, TaskStatus, TaskPriority
+    from app.models.models import GameType, Task, TaskCategory, TaskPriority, TaskStatus, TaskTemplate, User, UserRole
     from app.core.security import hash_password
 
     db = SessionLocal()
@@ -65,16 +70,6 @@ def create_default_data():
         if len(seed_password.encode("utf-8")) > 72:
             seed_password = seed_password[:72]
         default_password = hash_password(seed_password)
-        admin = db.query(User).filter(User.email == "admin@kiddo.com").first()
-        if not admin:
-            admin = User(
-                name="Admin",
-                email="admin@kiddo.com",
-                password_hash=default_password,
-                role=UserRole.ADMIN
-            )
-            db.add(admin)
-
         parent = db.query(User).filter(User.email == "parent@kiddo.com").first()
         if not parent:
             parent = User(
@@ -189,6 +184,7 @@ def create_default_data():
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
+    initialize_firebase_admin()
     create_default_data()
 
 

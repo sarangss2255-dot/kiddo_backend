@@ -5,17 +5,26 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
-from app.models.models import User, Task, GameSession, Reward, Redemption, TaskStatus, UserRole
+from app.models.models import (
+    AdminAccount,
+    GameSession,
+    Redemption,
+    Reward,
+    Task,
+    TaskStatus,
+    User,
+    UserRole,
+)
 from app.schemas import UserResponse, TaskResponse, RewardCreate, RewardResponse
 from app.api.deps import get_current_admin
-from app.models.models import User as UserModel
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+APP_USER_ROLES = [UserRole.KID, UserRole.PARENT]
 
 
 @router.get("/dashboard")
 async def get_dashboard_stats(
-    current_user: UserModel = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Get admin dashboard statistics."""
@@ -24,11 +33,17 @@ async def get_dashboard_stats(
     month_ago = now - timedelta(days=30)
 
     # User stats
-    total_users = db.query(func.count(User.id)).scalar()
+    total_users = db.query(func.count(User.id)).filter(User.role.in_(APP_USER_ROLES)).scalar()
     total_kids = db.query(func.count(User.id)).filter(User.role == UserRole.KID).scalar()
     total_parents = db.query(func.count(User.id)).filter(User.role == UserRole.PARENT).scalar()
-    active_users = db.query(func.count(User.id)).filter(User.is_active == True).scalar()
-    new_users_this_week = db.query(func.count(User.id)).filter(User.created_at >= week_ago).scalar()
+    active_users = db.query(func.count(User.id)).filter(
+        User.is_active == True,
+        User.role.in_(APP_USER_ROLES),
+    ).scalar()
+    new_users_this_week = db.query(func.count(User.id)).filter(
+        User.created_at >= week_ago,
+        User.role.in_(APP_USER_ROLES),
+    ).scalar()
 
     # Task stats
     total_tasks = db.query(func.count(Task.id)).scalar()
@@ -76,7 +91,7 @@ async def get_dashboard_stats(
 @router.get("/analytics/tasks")
 async def get_task_analytics(
     days: int = 30,
-    current_user: UserModel = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Get task completion analytics."""
@@ -124,7 +139,7 @@ async def get_task_analytics(
 @router.get("/analytics/users")
 async def get_user_analytics(
     days: int = 30,
-    current_user: UserModel = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Get user activity analytics."""
@@ -135,7 +150,10 @@ async def get_user_analytics(
     registrations = db.query(
         func.date(User.created_at).label("date"),
         func.count(User.id).label("count")
-    ).filter(User.created_at >= start_date).group_by(func.date(User.created_at)).all()
+    ).filter(
+        User.created_at >= start_date,
+        User.role.in_(APP_USER_ROLES),
+    ).group_by(func.date(User.created_at)).all()
 
     # Most active users
     active_users = db.query(
@@ -175,11 +193,11 @@ async def get_user_analytics(
 async def list_all_users(
     role: str = None,
     is_active: bool = None,
-    current_user: UserModel = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """List all users with optional filters."""
-    query = db.query(User)
+    query = db.query(User).filter(User.role.in_(APP_USER_ROLES))
 
     if role:
         query = query.filter(User.role == role)
@@ -193,7 +211,7 @@ async def list_all_users(
 @router.post("/rewards", response_model=RewardResponse, status_code=status.HTTP_201_CREATED)
 async def create_reward(
     reward_data: RewardCreate,
-    current_user: UserModel = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Create a new reward."""
@@ -210,7 +228,7 @@ async def create_reward(
 async def list_all_tasks(
     status: str = None,
     limit: int = 100,
-    current_user: UserModel = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """List all tasks."""
@@ -228,7 +246,7 @@ async def list_all_tasks(
 @router.delete("/users/{user_id}")
 async def deactivate_user(
     user_id: str,
-    current_user: UserModel = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Deactivate a user."""

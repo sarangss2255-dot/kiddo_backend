@@ -3,12 +3,13 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.models import User, UserRole
+from app.models.models import AdminAccount, User, UserRole
 from app.schemas import UserResponse, UserUpdate, UserWithChildren, ChildCreate
 from app.api.deps import get_current_user, get_current_parent, get_current_admin
 from app.core.security import hash_password
 
 router = APIRouter(prefix="/users", tags=["Users"])
+APP_USER_ROLES = [UserRole.KID, UserRole.PARENT]
 
 
 @router.get("/me", response_model=UserResponse)
@@ -87,7 +88,7 @@ async def create_child(
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: str,
-    current_user: User = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Get user by ID (admin only)."""
@@ -103,11 +104,11 @@ async def get_user(
 @router.get("/", response_model=List[UserResponse])
 async def list_users(
     role: str = None,
-    current_user: User = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """List all users (admin only)."""
-    query = db.query(User)
+    query = db.query(User).filter(User.role.in_(APP_USER_ROLES))
     if role:
         query = query.filter(User.role == role)
     users = query.all()
@@ -117,7 +118,7 @@ async def list_users(
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: str,
-    current_user: User = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Delete/deactivate a user (admin only)."""

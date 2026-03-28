@@ -1,10 +1,13 @@
 """Authentication endpoints."""
 import hashlib
 from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, verify_refresh_token
 from app.database import get_db
-from app.models.models import User, RefreshToken
+from app.models.models import RefreshToken, User, UserRole
 from app.schemas import (
     UserCreate, UserResponse, LoginRequest, TokenResponse,
     RefreshTokenRequest
@@ -12,7 +15,6 @@ from app.schemas import (
 from app.core.security import (
     create_access_token, create_refresh_token, hash_password, verify_password
 )
-from app.api.deps import get_current_user, verify_refresh_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -20,6 +22,12 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user."""
+    if user_data.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin accounts use the dedicated admin authentication flow",
+        )
+
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -92,6 +100,12 @@ async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
             detail="Account is deactivated"
         )
 
+    if user.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin accounts must use the dedicated admin authentication flow",
+        )
+
     # Generate tokens
     token_data = {"sub": str(user.id), "role": user.role}
     access_token = create_access_token(token_data)
@@ -122,6 +136,12 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token"
+        )
+
+    if user.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin accounts must use the dedicated admin authentication flow",
         )
 
     # Revoke old refresh token

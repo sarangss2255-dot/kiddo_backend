@@ -3,7 +3,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.models import User, Reward, Redemption, RedemptionStatus, UserRole
+from app.models.models import AdminAccount, Redemption, RedemptionStatus, Reward, User, UserRole
 from app.schemas import RewardCreate, RewardUpdate, RewardResponse, RedemptionCreate, RedemptionResponse
 from app.api.deps import get_current_user, get_current_parent, get_current_admin
 
@@ -22,7 +22,7 @@ async def list_rewards(
 @router.post("/", response_model=RewardResponse, status_code=status.HTTP_201_CREATED)
 async def create_reward(
     reward_data: RewardCreate,
-    current_user: User = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Create a new reward (admin only)."""
@@ -37,7 +37,7 @@ async def create_reward(
 async def update_reward(
     reward_id: str,
     reward_data: RewardUpdate,
-    current_user: User = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Update a reward (admin only)."""
@@ -60,7 +60,7 @@ async def update_reward(
 @router.delete("/{reward_id}")
 async def delete_reward(
     reward_id: str,
-    current_user: User = Depends(get_current_admin),
+    current_admin: AdminAccount = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Delete/deactivate a reward (admin only)."""
